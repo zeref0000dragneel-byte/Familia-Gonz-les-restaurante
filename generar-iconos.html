@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Generar Iconos PWA</title>
+</head>
+<body>
+    <h1>Generador de Iconos para PWA</h1>
+    <p>Este archivo genera los iconos necesarios para la PWA.</p>
+    <p>Simplemente haz clic en los botones de abajo para descargar los iconos.</p>
+    
+    <div style="margin: 20px 0;">
+        <button onclick="generarIcono(192)" style="padding: 10px 20px; font-size: 16px; margin: 10px;">
+            Descargar icon-192.png
+        </button>
+        <button onclick="generarIcono(512)" style="padding: 10px 20px; font-size: 16px; margin: 10px;">
+            Descargar icon-512.png
+        </button>
+    </div>
+    
+    <canvas id="canvas" style="display: none;"></canvas>
+    
+    <script>
+        function generarIcono(tamaño) {
+            const canvas = document.getElementById('canvas');
+            canvas.width = tamaño;
+            canvas.height = tamaño;
+            const ctx = canvas.getContext('2d');
+            
+            // Fondo azul con degradado
+            const gradient = ctx.createLinearGradient(0, 0, tamaño, tamaño);
+            gradient.addColorStop(0, '#2563eb');
+            gradient.addColorStop(1, '#1e40af');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, tamaño, tamaño);
+            
+            // Dibujar icono de gráfica de barras (simplificado)
+            const centerX = tamaño / 2;
+            const centerY = tamaño / 2;
+            const barWidth = tamaño * 0.08;
+            const spacing = tamaño * 0.15;
+            const maxHeight = tamaño * 0.4;
+            
+            // Color blanco para las barras
+            ctx.fillStyle = '#ffffff';
+            
+            // Barra 1 (más baja)
+            const bar1X = centerX - spacing * 1.5;
+            const bar1Height = maxHeight * 0.6;
+            ctx.fillRect(bar1X - barWidth / 2, centerY - bar1Height / 2, barWidth, bar1Height);
+            
+            // Barra 2 (media)
+            const bar2X = centerX;
+            const bar2Height = maxHeight * 0.9;
+            ctx.fillRect(bar2X - barWidth / 2, centerY - bar2Height / 2, barWidth, bar2Height);
+            
+            // Barra 3 (alta)
+            const bar3X = centerX + spacing * 1.5;
+            const bar3Height = maxHeight;
+            ctx.fillRect(bar3X - barWidth / 2, centerY - bar3Height / 2, barWidth, bar3Height);
+            
+            // Convertir a imagen y descargar
+            canvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `icon-${tamaño}.png`;
+                link.click();
+                URL.revokeObjectURL(url);
+                alert(`✅ Icono icon-${tamaño}.png descargado. Guárdalo en la misma carpeta que index.html`);
+            }, 'image/png');
+        }
+    </script>
+</body>
+</html>
+

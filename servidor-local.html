@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servidor Local - Instrucciones</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.6;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #2563eb; }
+        .code {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #1e40af;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Servidor Local para PWA</h1>
+        
+        <div class="warning">
+            <strong>⚠️ IMPORTANTE:</strong> Las PWAs necesitan un servidor HTTP para funcionar. 
+            No puedes abrir directamente el archivo HTML con <code>file://</code>.
+        </div>
+
+        <h2>📋 Opción 1: Usar Python (Más Fácil)</h2>
+        <p>Si tienes Python instalado (viene en la mayoría de sistemas):</p>
+        
+        <h3>Windows:</h3>
+        <div class="code">
+            # Abre PowerShell o CMD en la carpeta del proyecto
+            cd C:\Users\Gabriel\Desktop\prueba
+            python -m http.server 8000
+        </div>
+        
+        <h3>Mac/Linux:</h3>
+        <div class="code">
+            # Abre Terminal en la carpeta del proyecto
+            cd ~/Desktop/prueba
+            python3 -m http.server 8000
+        </div>
+        
+        <p>Luego abre en tu navegador:</p>
+        <div class="code">
+            http://localhost:8000/index.html
+        </div>
+
+        <h2>📋 Opción 2: Usar Node.js (http-server)</h2>
+        <p>Si tienes Node.js instalado:</p>
+        <div class="code">
+            # Instalar http-server globalmente (solo una vez)
+            npm install -g http-server
+            
+            # Luego, en la carpeta del proyecto
+            http-server -p 8000
+        </div>
+
+        <h2>📋 Opción 3: Usar Live Server (VS Code)</h2>
+        <p>Si usas VS Code:</p>
+        <ol>
+            <li>Instala la extensión "Live Server"</li>
+            <li>Haz clic derecho en <code>index.html</code></li>
+            <li>Selecciona "Open with Live Server"</li>
+        </ol>
+
+        <h2>📋 Opción 4: Usar Chrome con flags (Solo para pruebas)</h2>
+        <div class="warning">
+            <strong>Nota:</strong> Esta opción solo funciona en Chrome y solo para pruebas. 
+            No es recomendable para uso normal.
+        </div>
+        <ol>
+            <li>Cierra Chrome completamente</li>
+            <li>Inicia Chrome con el flag: <code>--allow-file-access-from-files</code></li>
+            <li>En Windows: Crea un acceso directo y agrega el flag al final</li>
+            <li>En Mac: <code>open -a "Google Chrome" --args --allow-file-access-from-files</code></li>
+        </ol>
+
+        <h2>✅ Verificar que funciona</h2>
+        <p>Una vez que tengas el servidor corriendo:</p>
+        <ol>
+            <li>Abre <code>http://localhost:8000/index.html</code> en tu navegador</li>
+            <li>Deberías ver el banner de instalación en la parte inferior</li>
+            <li>No deberías ver errores en la consola sobre Service Worker</li>
+            <li>La app debería funcionar completamente offline después de instalar</li>
+        </ol>
+
+        <div class="success">
+            <strong>💡 Tip:</strong> Una vez instalada la PWA, puedes cerrar el servidor. 
+            La app instalada funcionará offline sin necesidad del servidor.
+        </div>
+
+        <h2>🔧 Solución Rápida: Script de Inicio</h2>
+        <p>He creado un archivo <code>iniciar-servidor.bat</code> (Windows) que puedes usar para iniciar el servidor fácilmente.</p>
+    </div>
+</body>
+</html>
+

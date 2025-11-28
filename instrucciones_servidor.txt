@@ -1,0 +1,32 @@
+================================================
+  INSTRUCCIONES PARA INICIAR EL SERVIDOR
+================================================
+
+OPCIÓN 1 (MÁS FÁCIL):
+1. Haz doble clic en "iniciar-servidor.bat"
+2. El servidor se iniciará automáticamente en http://localhost:8000
+3. NO CIERRES la ventana del servidor
+
+OPCIÓN 2 (MANUAL):
+1. Abre CMD o PowerShell
+2. Navega al directorio del proyecto:
+   cd "C:\Users\Gabriel\Desktop\Comedor Gonzales"
+3. Ejecuta:
+   python -m http.server 8000
+4. Abre tu navegador en: http://localhost:8000
+
+================================================
+  SOLUCIÓN DE PROBLEMAS
+================================================
+
+Si ves errores 404:
+- Asegúrate de que el servidor se esté ejecutando desde el directorio del proyecto
+- Detén el servidor actual (Ctrl+C) y reinícialo
+- Verifica que todos los archivos estén en el mismo directorio
+
+Si el puerto 8000 está ocupado:
+- Cambia el puerto en el comando: python -m http.server 8080
+- O cierra la aplicación que está usando el puerto 8000
+
+================================================
+

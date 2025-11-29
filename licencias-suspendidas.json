@@ -1,11 +1,4 @@
 {
-  "licencias_suspendidas": [
-    {
-      "numero": "5",
-      "cliente": "Taco Time",
-      "razon": "Falta de pago",
-      "fecha_suspension": "2025-11-29T00:20:57.356Z"
-    }
-  ],
-  "ultima_actualizacion": "2025-11-29T00:20:57.357Z"
+  "licencias_suspendidas": [],
+  "ultima_actualizacion": "2025-11-29T00:16:56.445Z"
 }

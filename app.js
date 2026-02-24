@@ -372,6 +372,9 @@ window.continuarInicializacion = async function() {
     mostrarPedidos();
     mostrarGastos();
     
+    // Si Chart.js cargó con defer, la gráfica puede no estar aún; volver a intentar en 0.5s
+    setTimeout(function() { actualizarGrafica(); }, 500);
+    
     const hoy = obtenerFechaLocal();
     const pedidoFecha = document.getElementById('pedido-fecha');
     const gastoFecha = document.getElementById('gasto-fecha');
@@ -559,15 +562,19 @@ function cargarDesdeLocalStorage() {
     const ventasGuardadas = localStorage.getItem(STORAGE_VENTAS);
     const gastosGuardados = localStorage.getItem(STORAGE_GASTOS);
     
-    if (ventasGuardadas) {
-        ventas = JSON.parse(ventasGuardadas);
-    } else {
+    try {
+        ventas = ventasGuardadas ? JSON.parse(ventasGuardadas) : [];
+        if (!Array.isArray(ventas)) ventas = [];
+    } catch (e) {
+        console.warn('⚠️ Error al leer pedidos de localStorage, usando lista vacía:', e);
         ventas = [];
     }
     
-    if (gastosGuardados) {
-        gastos = JSON.parse(gastosGuardados);
-    } else {
+    try {
+        gastos = gastosGuardados ? JSON.parse(gastosGuardados) : [];
+        if (!Array.isArray(gastos)) gastos = [];
+    } catch (e) {
+        console.warn('⚠️ Error al leer gastos de localStorage, usando lista vacía:', e);
         gastos = [];
     }
     
@@ -666,6 +673,8 @@ function actualizarListasAutocompletado() {
     listaClientes.clear();
     listaMeseros.clear();
     listaDescripciones.clear();
+    
+    if (!Array.isArray(ventas)) return;
     
     ventas.forEach(pedido => {
         if (pedido.cliente) listaClientes.add(pedido.cliente);
@@ -1002,7 +1011,10 @@ function calcularTotalPedido() {
     }
 }
 
+let guardandoPedido = false;
 async function guardarPedido() {
+    if (guardandoPedido) return;
+    
     // Validar datos de la mesa
     const fecha = document.getElementById('pedido-fecha').value;
     const mesa = document.getElementById('pedido-mesa').value.trim();
@@ -1068,19 +1080,28 @@ async function guardarPedido() {
     // Agregar a la lista
     ventas.push(nuevoPedido);
     
-    // Guardar
-    await guardarVentas();
+    guardandoPedido = true;
+    const formPedido = document.getElementById('form-pedido');
+    const btnPedido = formPedido ? formPedido.querySelector('button[type="submit"]') : null;
+    if (btnPedido) { btnPedido.disabled = true; btnPedido.textContent = '⏳ Guardando...'; }
+    
+    try {
+        await guardarVentas();
+    } finally {
+        guardandoPedido = false;
+        if (btnPedido) { btnPedido.disabled = false; btnPedido.textContent = '💾 GUARDAR PEDIDO'; }
+    }
     
     // Limpiar formulario
-    document.getElementById('form-pedido').reset();
+    if (formPedido) formPedido.reset();
     const tbody = document.getElementById('tbody-articulos');
     if (tbody) {
-        // Eliminar solo las filas de artículos, mantener la fila de datos de mesa
         const filasArticulos = Array.from(tbody.children).filter(tr => tr.id !== 'fila-datos-mesa');
         filasArticulos.forEach(fila => fila.remove());
     }
     articulosTemporales = [];
-    document.getElementById('pedido-fecha').value = obtenerFechaLocal();
+    const pedidoFechaEl = document.getElementById('pedido-fecha');
+    if (pedidoFechaEl) pedidoFechaEl.value = obtenerFechaLocal();
     const totalSpan = document.getElementById('pedido-total');
     if (totalSpan) {
         totalSpan.textContent = '$0.00';
@@ -1279,175 +1300,146 @@ async function eliminarPedido(id) {
 function imprimirTicket(id) {
     const pedido = ventas.find(v => v.id === id);
     if (!pedido) return;
-    
-    // Compatibilidad con datos antiguos
+
     const precioUnitario = (art) => art.precioUnitario || art.precio || 0;
-    
-    // Crear ventana de impresión con formato de ticket
-    const ventanaImpresion = window.open('', '_blank', 'width=300,height=600');
-    
-    // Formatear fecha para el ticket
+
+    const mon = (val) => '$' + Number(val || 0).toLocaleString('es-MX', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+
     const fecha = new Date(pedido.fecha + 'T00:00:00');
-    const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
-    const fechaFormateada = fecha.toLocaleDateString('es-MX', opciones);
-    
-    // Generar HTML del ticket
-    const htmlTicket = `
-<!DOCTYPE html>
+    const fechaFormateada = fecha.toLocaleDateString('es-MX', {
+        year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    const filas = (pedido.articulos || []).map(art => `
+        <div style="border-bottom:1px dashed #aaa; padding:4px 0; font-family:Arial,sans-serif; font-size:10pt;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div style="flex:1; min-width:0; padding:0 2px; word-break:break-word;">
+                    ${(art.descripcion || '').toString()} (x${art.cantidad})
+                </div>
+                <div style="width:78px; flex-shrink:0; text-align:right; padding:0 2px; white-space:nowrap; font-weight:bold;">
+                    ${mon(art.subtotal)}
+                </div>
+            </div>
+            <div style="font-size:9pt; color:#000; padding:0 2px;">
+                ${mon(precioUnitario(art))} c/u
+            </div>
+        </div>`).join('');
+
+    const htmlFinal = `<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ticket - Comedor Gonzáles</title>
+    <title>Ticket - Comedor González</title>
     <style>
         @media print {
-            @page {
-                size: 80mm auto;
-                margin: 5mm;
-            }
-            body {
-                margin: 0;
-                padding: 0;
-            }
+            @page { size: 58mm auto; margin: 2mm 1mm; }
+            body  { margin: 0; padding: 0; }
+            .no-print { display: none !important; }
         }
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            width: 80mm;
-            max-width: 80mm;
+            font-family: Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.5;
+            width: 220px;
+            max-width: 220px;
             margin: 0 auto;
-            padding: 10px;
-            background: white;
+            padding: 4px 0;
+            background: #fff;
+            color: #000;
+            -webkit-font-smoothing: none;
+            font-smooth: never;
         }
-        .ticket-header {
-            text-align: center;
-            margin-bottom: 10px;
-            border-bottom: 2px dashed #000;
-            padding-bottom: 10px;
-        }
-        .ticket-title {
-            font-size: 18px;
+        .encabezado  { text-align: center; margin-bottom: 4px; }
+        .nombre      { font-family: 'Arial Black', Arial, sans-serif;
+                       font-size: 13pt; font-weight: 900; letter-spacing: 0.3px; }
+        .fecha-txt   { font-size: 9pt; margin-top: 1px; }
+        .linea-doble { border-top: 2.5px solid #000; margin: 4px 0; }
+        .linea-dash  { border-top: 1px dashed #555; margin: 3px 0; }
+        .info        { margin: 4px 0; font-size: 10pt; }
+        .info-fila   { display: flex; margin-bottom: 2px; }
+        .info-label  { font-weight: bold; min-width: 68px; flex-shrink: 0; }
+        .col-header  {
+            display: flex;
+            border-top: 1.5px solid #000;
+            border-bottom: 1.5px solid #000;
+            padding: 3px 0;
+            font-size: 9pt;
             font-weight: bold;
             text-transform: uppercase;
-            margin-bottom: 5px;
         }
-        .ticket-date {
-            font-size: 11px;
-            margin-top: 5px;
-        }
-        .ticket-info {
-            margin: 10px 0;
-            font-size: 11px;
-            line-height: 1.4;
-        }
-        .ticket-info strong {
-            display: inline-block;
-            min-width: 60px;
-        }
-        .ticket-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 10px 0;
-            font-size: 10px;
-        }
-        .ticket-table thead {
-            border-top: 1px solid #000;
-            border-bottom: 1px solid #000;
-        }
-        .ticket-table th {
-            text-align: left;
-            padding: 5px 2px;
-            font-weight: bold;
-            text-transform: uppercase;
-            font-size: 9px;
-        }
-        .ticket-table td {
-            padding: 4px 2px;
-            border-bottom: 1px dashed #ccc;
-        }
-        .ticket-table td:first-child {
-            width: 40%;
-        }
-        .ticket-table td:nth-child(2),
-        .ticket-table td:nth-child(3),
-        .ticket-table td:nth-child(4) {
+        .total-bloque {
             text-align: right;
-            width: 20%;
+            font-family: 'Arial Black', Arial, sans-serif;
+            font-size: 13pt;
+            font-weight: 900;
+            padding: 2px 2px;
         }
-        .ticket-total {
-            text-align: right;
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 2px solid #000;
-            font-size: 14px;
-            font-weight: bold;
-        }
-        .ticket-footer {
-            text-align: center;
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px dashed #000;
-            font-size: 10px;
+        .footer    { text-align: center; font-size: 9pt; margin-top: 4px; }
+        .no-print  { text-align: center; margin-top: 10px; }
+        .no-print button {
+            font-family: inherit; font-size: 10pt; padding: 5px 16px;
+            cursor: pointer; border: 1px solid #333;
+            background: #f5f5f5; border-radius: 4px;
         }
     </style>
 </head>
 <body>
-    <div class="ticket-header">
-        <div class="ticket-title">Comedor Gonzáles</div>
-        <div class="ticket-date">${fechaFormateada}</div>
+
+    <div class="encabezado">
+        <div class="nombre">Comedor González</div>
+        <div class="fecha-txt">${fechaFormateada}</div>
     </div>
-    
-    <div class="ticket-info">
-        <div><strong>MESA:</strong> ${pedido.mesa}</div>
-        <div><strong>MESERO:</strong> ${pedido.mesero}</div>
-        <div><strong>CLIENTE:</strong> ${pedido.cliente}</div>
-        <div><strong>FECHA:</strong> ${fechaFormateada}</div>
+
+    <div class="linea-doble"></div>
+
+    <div class="info">
+        <div class="info-fila">
+            <span class="info-label">MESA:</span>
+            <span>${(pedido.mesa    || '').toString().substring(0, 28)}</span>
+        </div>
+        <div class="info-fila">
+            <span class="info-label">MESERO:</span>
+            <span>${(pedido.mesero  || '').toString().substring(0, 28)}</span>
+        </div>
+        <div class="info-fila">
+            <span class="info-label">CLIENTE:</span>
+            <span>${(pedido.cliente || '').toString().substring(0, 28)}</span>
+        </div>
     </div>
-    
-    <table class="ticket-table">
-        <thead>
-            <tr>
-                <th>DESCRIPCION</th>
-                <th>PRECIO</th>
-                <th>CANT</th>
-                <th>SUB_TOTAL</th>
-            </tr>
-        </thead>
-        <tbody>
-            ${pedido.articulos.map(art => `
-                <tr>
-                    <td>${art.descripcion}</td>
-                    <td>${formatearMoneda(precioUnitario(art))}</td>
-                    <td>${art.cantidad}</td>
-                    <td>${formatearMoneda(art.subtotal)}</td>
-                </tr>
-            `).join('')}
-        </tbody>
-    </table>
-    
-    <div class="ticket-total">
-        TOTAL: ${formatearMoneda(pedido.totalFinal)}
+
+    <div class="linea-dash"></div>
+
+    <div class="col-header">
+        <div style="flex:1; min-width:0; padding:0 2px; text-align:left;">Artículo</div>
+        <div style="width:78px; flex-shrink:0; padding:0 2px; text-align:right;">Importe</div>
     </div>
-    
-    <div class="ticket-footer">
-        ¡Gracias por su visita!
+
+    ${filas}
+
+    <div class="linea-doble"></div>
+    <div class="total-bloque">TOTAL: ${mon(pedido.totalFinal)}</div>
+    <div class="linea-dash"></div>
+    <div class="footer">¡Gracias por su visita!</div>
+
+    <div class="no-print">
+        <button onclick="window.print()">🖨 Imprimir ticket</button>
     </div>
-    
+
     <script>
-        window.onload = function() {
-            window.print();
+        window.onload = function () {
+            setTimeout(function () { window.print(); }, 400);
         };
-    </script>
+    <\/script>
+
 </body>
-</html>
-    `;
-    
-    ventanaImpresion.document.write(htmlTicket);
+</html>`;
+
+    const ventanaImpresion = window.open('', '_blank', 'width=280,height=700');
+    ventanaImpresion.document.write(htmlFinal);
     ventanaImpresion.document.close();
 }
 
@@ -1455,7 +1447,10 @@ function imprimirTicket(id) {
 // GESTIÓN DE GASTOS
 // ============================================
 
+let guardandoGasto = false;
 async function guardarGasto() {
+    if (guardandoGasto) return;
+    
     const fecha = document.getElementById('gasto-fecha').value;
     const categoria = document.getElementById('gasto-categoria').value;
     const concepto = document.getElementById('gasto-concepto').value.trim();
@@ -1475,14 +1470,25 @@ async function guardarGasto() {
     };
     
     gastos.push(nuevoGasto);
-    await guardarGastos();
     
-    document.getElementById('form-gasto').reset();
-    document.getElementById('gasto-fecha').value = obtenerFechaLocal();
+    guardandoGasto = true;
+    const formGasto = document.getElementById('form-gasto');
+    const btnGasto = formGasto ? formGasto.querySelector('button[type="submit"]') : null;
+    if (btnGasto) { btnGasto.disabled = true; btnGasto.textContent = '⏳ Guardando...'; }
+    
+    try {
+        await guardarGastos();
+    } finally {
+        guardandoGasto = false;
+        if (btnGasto) { btnGasto.disabled = false; btnGasto.textContent = '💾 Guardar Gasto'; }
+    }
+    
+    if (formGasto) formGasto.reset();
+    const gastoFechaEl = document.getElementById('gasto-fecha');
+    if (gastoFechaEl) gastoFechaEl.value = obtenerFechaLocal();
     
     actualizarDashboard();
     
-    // Mantener el filtro activo si hay uno seleccionado
     const filtroCategoria = document.getElementById('filtro-categoria');
     const categoriaFiltro = filtroCategoria ? filtroCategoria.value : '';
     mostrarGastos(categoriaFiltro);
@@ -1550,30 +1556,33 @@ async function eliminarGasto(id) {
 // ============================================
 
 function actualizarDashboard() {
+    const ventasArr = Array.isArray(ventas) ? ventas : [];
+    const gastosArr = Array.isArray(gastos) ? gastos : [];
+    
     const hoy = obtenerFechaLocal();
     const inicioSemana = obtenerInicioSemana(hoy);
     const finSemana = obtenerFinSemana(hoy);
     const inicioMes = hoy.substring(0, 7);
     
     // Calcular totales de ventas
-    const ventasHoy = ventas.filter(v => v.fecha === hoy);
-    const ventasSemana = ventas.filter(v => v.fecha >= inicioSemana && v.fecha <= finSemana);
-    const ventasMes = ventas.filter(v => v.fecha.startsWith(inicioMes));
+    const ventasHoy = ventasArr.filter(v => v && v.fecha === hoy);
+    const ventasSemana = ventasArr.filter(v => v && v.fecha >= inicioSemana && v.fecha <= finSemana);
+    const ventasMes = ventasArr.filter(v => v && v.fecha && v.fecha.startsWith(inicioMes));
     
-    const ingresoHoy = ventasHoy.reduce((sum, v) => sum + v.totalFinal, 0);
-    const ingresoSemana = ventasSemana.reduce((sum, v) => sum + v.totalFinal, 0);
-    const ingresoMes = ventasMes.reduce((sum, v) => sum + v.totalFinal, 0);
-    const ingresoTotal = ventas.reduce((sum, v) => sum + v.totalFinal, 0);
+    const ingresoHoy = ventasHoy.reduce((sum, v) => sum + (v.totalFinal || 0), 0);
+    const ingresoSemana = ventasSemana.reduce((sum, v) => sum + (v.totalFinal || 0), 0);
+    const ingresoMes = ventasMes.reduce((sum, v) => sum + (v.totalFinal || 0), 0);
+    const ingresoTotal = ventasArr.reduce((sum, v) => sum + (v.totalFinal || 0), 0);
     
     // Calcular totales de gastos
-    const gastosHoy = gastos.filter(g => g.fecha === hoy);
-    const gastosSemana = gastos.filter(g => g.fecha >= inicioSemana && g.fecha <= finSemana);
-    const gastosMes = gastos.filter(g => g.fecha.startsWith(inicioMes));
+    const gastosHoy = gastosArr.filter(g => g && g.fecha === hoy);
+    const gastosSemana = gastosArr.filter(g => g && g.fecha >= inicioSemana && g.fecha <= finSemana);
+    const gastosMes = gastosArr.filter(g => g && g.fecha && g.fecha.startsWith(inicioMes));
     
-    const gastoHoy = gastosHoy.reduce((sum, g) => sum + g.monto, 0);
-    const gastoSemana = gastosSemana.reduce((sum, g) => sum + g.monto, 0);
-    const gastoMes = gastosMes.reduce((sum, g) => sum + g.monto, 0);
-    const gastoTotal = gastos.reduce((sum, g) => sum + g.monto, 0);
+    const gastoHoy = gastosHoy.reduce((sum, g) => sum + (g.monto || 0), 0);
+    const gastoSemana = gastosSemana.reduce((sum, g) => sum + (g.monto || 0), 0);
+    const gastoMes = gastosMes.reduce((sum, g) => sum + (g.monto || 0), 0);
+    const gastoTotal = gastosArr.reduce((sum, g) => sum + (g.monto || 0), 0);
     
     // Calcular saldos
     const saldoHoy = ingresoHoy - gastoHoy;
@@ -1587,8 +1596,8 @@ function actualizarDashboard() {
     const propinasMes = ventasMes.reduce((sum, v) => sum + (v.propina || 0), 0);
     
     // Ventas pagadas vs pendientes
-    const ventasPagadasHoy = ventasHoy.filter(v => v.estaPagado);
-    const ventasPendientesHoy = ventasHoy.filter(v => !v.estaPagado);
+    const ventasPagadasHoy = ventasHoy.filter(v => v && v.estaPagado);
+    const ventasPendientesHoy = ventasHoy.filter(v => v && !v.estaPagado);
     const totalPagadoHoy = ventasPagadasHoy.reduce((sum, v) => sum + v.totalFinal, 0);
     const totalPendienteHoy = ventasPendientesHoy.reduce((sum, v) => sum + v.totalFinal, 0);
     
@@ -1626,6 +1635,7 @@ function actualizarDashboard() {
 function actualizarGrafica() {
     const canvas = document.getElementById('chart-ventas');
     if (!canvas) return;
+    if (typeof Chart === 'undefined') return; // Chart.js puede cargar con defer y no estar aún
     
     const ctx = canvas.getContext('2d');
     const hoy = new Date(obtenerFechaLocal());
@@ -1635,6 +1645,9 @@ function actualizarGrafica() {
     const dataIngresos = [];
     const dataGastos = [];
     
+    const ventasArr = Array.isArray(ventas) ? ventas : [];
+    const gastosArr = Array.isArray(gastos) ? gastos : [];
+    
     for (let i = 6; i >= 0; i--) {
         const fecha = new Date(hoy);
         fecha.setDate(fecha.getDate() - i);
@@ -1642,8 +1655,8 @@ function actualizarGrafica() {
         
         labels.push(formatearFechaCorta(fechaStr));
         
-        const ventasDia = ventas.filter(v => v.fecha === fechaStr);
-        const gastosDia = gastos.filter(g => g.fecha === fechaStr);
+        const ventasDia = ventasArr.filter(v => v && v.fecha === fechaStr);
+        const gastosDia = gastosArr.filter(g => g && g.fecha === fechaStr);
         
         dataIngresos.push(ventasDia.reduce((sum, v) => sum + v.totalFinal, 0));
         dataGastos.push(gastosDia.reduce((sum, g) => sum + g.monto, 0));
@@ -2124,6 +2137,8 @@ function obtenerFinSemana(fechaStr) {
 }
 
 function mostrarMensaje(texto, tipo = 'info') {
+    if (texto == null || texto === '') return;
+    
     const container = document.getElementById('mensaje-container') || crearContenedorMensajes();
     
     const mensaje = document.createElement('div');
